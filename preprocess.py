@@ -106,3 +106,4 @@ if __name__ == '__main__':
     logging.info('COMMAND: %s' % ' '.join(sys.argv))
     logging.info('Arguments: {}'.format(vars(args)))
     main(args)
+#try
