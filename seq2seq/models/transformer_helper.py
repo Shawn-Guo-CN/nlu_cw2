@@ -33,6 +33,12 @@ class TransformerEncoderLayer(nn.Module):
         What is the purpose of encoder_padding_mask? What will the output shape of `state' Tensor 
         be after multi-head attention? HINT: formulate your  answer in terms of 
         constituent variables like batch_size, embed_dim etc...
+        
+        i) The length of the sentences in the same batch is not necessarily the same, thus we can use
+         \emph{encoder_padding_mask} is to enable the encoder to tell which tokens are informationless and 
+        ignore them while genereating context vectors. 
+
+        ii) Shape of `state' Tensor: [len_src_sentence, batch_size, embed_dim]
         '''
         state, _ = self.self_attn(query=state, key=state, value=state, key_padding_mask=encoder_padding_mask)
         '''
@@ -115,6 +121,16 @@ class TransformerDecoderLayer(nn.Module):
         ___QUESTION-6-DESCRIBE-E-START___
         How does encoder attention differ from self attention? What is the difference between key_padding_mask 
         and attn_mask? If you understand this difference, then why don't we need to give attn_mask here?
+
+        i) Self attention is used to encode the contextual information of the input to the decoder, i.e. `tgt_inputs',
+           whereas encoder attention is to enable decoder encode the contextual information from the output states 
+           of encoder, i.e. `encoder_out'.
+        
+        ii) `key_padding_mask' is used for ignoring the <pad> symbols which don't convey any information about the
+            context, whereas `attn_mask' is used to hide the future information when generating the output tokens;
+
+        iii) Because we already got the whole output of encoder when genereating the output sequences, thus, we can 
+             safely allow the model to encode the whole sequence from encoder.
         '''
         state, attn = self.encoder_attn(query=state,
                                         key=encoder_out,
