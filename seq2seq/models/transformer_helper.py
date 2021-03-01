@@ -127,7 +127,7 @@ class TransformerDecoderLayer(nn.Module):
            of encoder, i.e. `encoder_out'.
         
         ii) `key_padding_mask' is used for ignoring the <pad> symbols which don't convey any information about the
-            context, whereas `attn_mask' is used to hide the future information when generating the output tokens;
+            context, whereas `attn_mask' is used to hide the subsequent information when generating the output tokens;
 
         iii) Because we already got the whole output of encoder when genereating the output sequences, thus, we can 
              safely allow the model to encode the whole sequence from encoder.
@@ -225,9 +225,64 @@ class MultiHeadAttention(nn.Module):
         # attn_weights is the combined output of h parallel heads of Attention(Q,K,V) in Vaswani et al. 2017
         # attn_weights must be size [num_heads, batch_size, tgt_time_steps, key.size(0)]
         # TODO: REPLACE THESE LINES WITH YOUR IMPLEMENTATION ------------------------ CUT
-        attn = torch.zeros(size=(tgt_time_steps, batch_size, embed_dim))
-        attn_weights = torch.zeros(size=(self.num_heads, batch_size, tgt_time_steps, -1)) if need_weights else None
+        # attn = torch.zeros(size=(tgt_time_steps, batch_size, embed_dim))
+        # attn_weights = torch.zeros(size=(self.num_heads, batch_size, tgt_time_steps, -1)) if need_weights else None
         # TODO: --------------------------------------------------------------------- CUT
+        
+        # query = [query len, batch size, hid dim]
+        # key = [key len, batch size, hid dim]
+        # value = [value len, batch size, hid dim]
+        query = query.permute(1,0,2)
+        key = key.permute(1,0,2)
+        value = value.permute(1,0,2)
+                
+        Q = self.q_proj(query)
+        K = self.k_proj(key)
+        V = self.v_proj(value)
+        
+        # Q = [batch size, query len, embed_dim]
+        # K = [batch size, key len, embed_dim]
+        # V = [batch size, value len, embed_dim]
+                
+        Q = Q.view(batch_size, -1, self.num_heads, self.head_embed_size).permute(0, 2, 1, 3)
+        K = K.view(batch_size, -1, self.num_heads, self.head_embed_size).permute(0, 2, 1, 3)
+        V = V.view(batch_size, -1, self.num_heads, self.head_embed_size).permute(0, 2, 1, 3)
+        
+        #Q = [batch size, n heads, query len, head embed dim]
+        #K = [batch size, n heads, key len, head embed dim]
+        #V = [batch size, n heads, value len, head embed dim]
+
+        energy = torch.matmul(Q, K.permute(0, 1, 3, 2)) / self.head_scaling
+        
+        #energy = [batch size, n heads, query len, key len]
+        
+        if key_padding_mask is not None:
+            energy = energy.masked_fill(key_padding_mask == 0, -1e32)
+        
+        if attn_mask is not None:
+            energy = energy.masked_fill(attn_mask == 0, -1e32)
+        
+        attn_weights = F.softmax(energy, dim=-1)
+
+        #attn_weights = [batch size, n heads, query len, key len]
+                
+        attn = torch.matmul(self.attention_dropout(attn_weights), V)
+
+        attn_weights = None if not need_weights else attn_weights
+        
+        #attn = [batch size, n heads, query len, head embed dim]
+        
+        attn = attn.permute(2, 0, 1, 3).contiguous()
+        
+        #attn = [query len, batch size, n heads, head dim]
+        
+        attn = attn.view(-1, batch_size, self.embed_dim)
+        
+        #attn = [query len, batch size, hid dim]
+        
+        attn = self.out_proj(attn)
+        
+        #attn = [query len, batch size, hid dim]
 
         '''
         ___QUESTION-7-MULTIHEAD-ATTENTION-END
