@@ -257,18 +257,21 @@ class MultiHeadAttention(nn.Module):
         #energy = [batch size, n heads, query len, key len]
         
         if key_padding_mask is not None:
-            energy = energy.masked_fill(key_padding_mask == 0, -1e32)
+            energy = energy.masked_fill(key_padding_mask.unsqueeze(1).unsqueeze(2), float('-inf'))
         
         if attn_mask is not None:
-            energy = energy.masked_fill(attn_mask == 0, -1e32)
+            energy += attn_mask
         
         attn_weights = F.softmax(energy, dim=-1)
 
         #attn_weights = [batch size, n heads, query len, key len]
-                
-        attn = torch.matmul(self.attention_dropout(attn_weights), V)
+            
+        attn = torch.matmul(F.dropout(attn_weights, 
+                                      p=self.attention_dropout,
+                                      training=self.training), V
+                            )
 
-        attn_weights = None if not need_weights else attn_weights
+        attn_weights = None if not need_weights else attn_weights.transpose(0,1)
         
         #attn = [batch size, n heads, query len, head embed dim]
         
@@ -329,7 +332,7 @@ class PositionalEmbedding(nn.Module):
 
         # Replace non-padding symbols with position numbers from padding_idx+1 onwards.
         mask = inputs.ne(self.padding_idx).int()
-        positions = (torch.cumsum(mask, dim=1).type_as(inputs) * mask).long() + self.padding_idx
+        positions = (torch.cumsum(mask, dim=1).type_as(inputs) * mask.long()).long() + self.padding_idx
 
         # Lookup positional embeddings for each position and return in shape of input tensor w/o gradient
         return self.weights.index_select(0, positions.view(-1)).view(batch_size, seq_len, -1).detach()
